@@ -502,39 +502,49 @@ gl.run.popcluster <- function(x,
     
     best <- readLines(con <- file(file.path(tempd, i)))
     close(con)
-    Q_raw <- stringr::str_split(best[(which(startsWith(
-      best, "Inferred ancestry of individuals"
-    )) + 2):(which(startsWith(
-      best, "Inferred ancestry of individuals"
-    )) + 1 + nInd(x))], " ")
-    
-    for (j in 1:length(Q_raw)) {
-      Q_raw[[j]][which(Q_raw[[j]] == "")] <- NA
-      Q_raw[[j]][which(Q_raw[[j]] == ":")] <- NA
-      Q_raw[[j]] <- na.omit(Q_raw[[j]])
-      Q <- data.frame(rbind(Q, Q_raw[[j]]))
-    }
-    
-      Q <- Q[,-(4:5)]
-    
+    hdr <- which(startsWith(best, "Inferred ancestry of individuals"))
+    anc_lines <- best[(hdr + 2):(hdr + 1 + nInd(x))]
+
+    # Each ancestry line has the layout
+    #   Index Order <PopName...> %Miss Cluster : prop_1 prop_2 ... prop_K
+    # The <PopName> column is the genlight population label and may contain
+    # spaces (e.g. "Upper Murray") or wide multi-byte characters (e.g. the
+    # en-dash in "Macquarie-Castlereagh"), so the number of whitespace tokens
+    # varies between individuals. Anchor on the ":" and read Index/Order from
+    # the front and %Miss/Cluster from the back, so parsing never depends on
+    # the (variable) token count of the middle. The previous approach split on
+    # spaces and used fixed positional columns, which misaligned these rows and
+    # recycled the Index into the last cluster, producing ancestry values > 1.
+    Q_rows <- lapply(anc_lines, function(line) {
+      sp    <- strsplit(line, ":", fixed = TRUE)[[1]]
+      left  <- strsplit(trimws(sp[1]), "\\s+")[[1]]
+      props <- as.numeric(strsplit(trimws(sp[2]), "\\s+")[[1]])
+      n <- length(left)
+      data.frame(
+        Index       = as.integer(left[1]),
+        Order       = as.integer(left[2]),
+        PercentMiss = left[n - 1],
+        Cluster     = left[n],
+        t(props),
+        stringsAsFactors = FALSE
+      )
+    })
+    Q <- do.call(rbind, Q_rows)
     colnames(Q) <- c("Index",
                      "Order",
-                     "Label",
                      "PercentMiss",
                      "Cluster",
-                     paste0("Pop_", seq(1, (ncol(
-                       Q
-                     ) - 5), by = 1)))
-    Q$Label <- sample_name[as.integer(Q$Index)]
+                     paste0("Pop_", seq_len(ncol(Q) - 4)))
+    Q$Label <- sample_name[Q$Index]
     Q$Cluster <- as.character(Q$Cluster)
     Q$Pop <- as.character(x$pop)
+    # restore the documented column order
+    Q <- Q[, c("Index", "Order", "Label", "PercentMiss", "Cluster",
+               paste0("Pop_", seq_len(sum(startsWith(names(Q), "Pop_")))),
+               "Pop")]
     # change the Order
     Q <- Q[with(Q, order(Q$Pop, as.numeric(Q$Cluster))), ]
     Q$Order <- 1:nrow(Q)
-    Q <- Q %>%
-      mutate_at(paste0("Pop_", seq(1, (ncol(
-        Q
-      ) - 6), by = 1)), as.numeric)
     Q_matrices[[i]] <- Q
     Q <- NULL
   }
