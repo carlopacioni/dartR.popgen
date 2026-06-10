@@ -94,13 +94,16 @@ gl.plot.popcluster <- function(pop_cluster_result,
   best_run <- pop_cluster_result$best_run[which(pop_cluster_result$best_run$K == plot.K),'BestRun']
   Q <- pop_cluster_result$matrix[best_run][[1]]
   Q_long <- tidyr::pivot_longer(Q, cols = starts_with("Pop_"), names_to = "K", values_to = "values")
+  
   if (is.null(color_clusters)) {
     color_clusters <- gl.select.colors(ncolors = max(plot.K), verbose = 0)
   }
   
-  p3 <- ggplot(Q_long, aes_(x = ~ factor(Order), y = ~values, fill = ~K)) +
-    geom_col(size = 0.15, width = 1, position = "fill")+
-    facet_grid( ~ factor(Pop, levels=unique(Q_long$Pop)), scales = "free", space = "free") +
+  p3 <- ggplot(Q_long, aes(x = factor(Order), y = values, fill = K)) +
+    geom_col(color = "black", linewidth = border_ind, width = 1) +
+    facet_grid( ~ factor(Pop, levels=unique(Q_long$Pop)), 
+                scales = "free", 
+                space = "free") +
     scale_y_continuous(expand = c(0, 0)) +
     scale_x_discrete(
       breaks = unique(Q_long$Order),
@@ -114,7 +117,7 @@ gl.plot.popcluster <- function(pop_cluster_result,
       panel.border = element_rect(
         color = "black",
         fill = NA,
-        size = 1
+        linewidth = 1
       ),
       strip.background = element_blank(),
       strip.text.x = element_text(size = 12, angle = 90),
